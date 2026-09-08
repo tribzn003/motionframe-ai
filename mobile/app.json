@@ -1,1 +1,24 @@
-
+{
+  "expo": {
+    "name": "MotionFrame AI",
+    "slug": "motionframe-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "motionframe",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow MotionFrame AI to select photos for video generation."
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.motionframe.ai"
+    },
+    "extra": {
+      "backendUrl": "https://YOUR-BACKEND.onrender.com"
+    }
+  }
+}
