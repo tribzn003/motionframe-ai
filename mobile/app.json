@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "MotionFrame AI",
@@ -18,7 +19,10 @@
       "package": "com.motionframe.ai"
     },
     "extra": {
-  "backendUrl": "https://motionframe-ai.onrender.com"
+      "backendUrl": "https://motionframe-ai.onrender.com",
+      "eas": {
+        "projectId": "d09c0be9-ed70-40d8-ab44-a646307ab763"
+      }
     }
   }
 }
