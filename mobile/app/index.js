@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
+
 import * as ImagePicker from "expo-image-picker";
 import { execute } from "munim-ffmpeg";
 
 export default function HomeScreen() {
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState(null);
+  const [videoUri, setVideoUri] = useState(null);
   const [creating, setCreating] = useState(false);
 
   const pickImage = async () => {
@@ -40,7 +41,7 @@ export default function HomeScreen() {
         setImageUri(result.assets[0].uri);
         setVideoUri(null);
       }
-    } catch (error: any) {
+    } catch (error) {
       Alert.alert(
         "Image error",
         error?.message || String(error)
@@ -50,7 +51,10 @@ export default function HomeScreen() {
 
   const createVideo = async () => {
     if (!imageUri) {
-      Alert.alert("Select photo", "Please select a photo first.");
+      Alert.alert(
+        "Select photo",
+        "Please select a photo first."
+      );
       return;
     }
 
@@ -58,21 +62,26 @@ export default function HomeScreen() {
       setCreating(true);
       setVideoUri(null);
 
-      // FFmpeg најпоузданије ради са обичном локалном путањом.
       const inputPath = imageUri.startsWith("file://")
         ? imageUri.substring(7)
         : imageUri;
 
-      const slash = inputPath.lastIndexOf("/");
+      const slashIndex = inputPath.lastIndexOf("/");
 
-      if (slash === -1) {
+      if (slashIndex === -1) {
         throw new Error("Invalid image path.");
       }
 
-      const directory = inputPath.substring(0, slash + 1);
+      const directory = inputPath.substring(
+        0,
+        slashIndex + 1
+      );
 
       const outputPath =
-        directory + "generated_video_" + Date.now() + ".mp4";
+        directory +
+        "motionframe_" +
+        Date.now() +
+        ".mp4";
 
       const args = [
         "-y",
@@ -93,13 +102,10 @@ export default function HomeScreen() {
         "5",
 
         "-c:v",
-        "libx264",
+        "libopenh264",
 
-        "-preset",
-        "veryfast",
-
-        "-crf",
-        "23",
+        "-b:v",
+        "2M",
 
         "-movflags",
         "+faststart",
@@ -117,15 +123,17 @@ export default function HomeScreen() {
         );
       }
 
-      const finalUri = "file://" + outputPath;
+      const finalUri = outputPath.startsWith("file://")
+        ? outputPath
+        : "file://" + outputPath;
 
       setVideoUri(finalUri);
 
       Alert.alert(
         "Success",
-        "Video created successfully."
+        "Video created successfully!"
       );
-    } catch (error: any) {
+    } catch (error) {
       Alert.alert(
         "Video error",
         error?.message || String(error)
@@ -140,11 +148,11 @@ export default function HomeScreen() {
       contentContainerStyle={styles.container}
     >
       <Text style={styles.title}>
-        Free Photo to Video
+        MotionFrame AI
       </Text>
 
       <Text style={styles.subtitle}>
-        Create videos from your photos
+        Free Photo to Video
       </Text>
 
       <TouchableOpacity
@@ -177,7 +185,11 @@ export default function HomeScreen() {
       >
         {creating ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" />
+            <ActivityIndicator
+              size="small"
+              color="#ffffff"
+            />
+
             <Text style={styles.buttonText}>
               Creating video...
             </Text>
@@ -192,7 +204,7 @@ export default function HomeScreen() {
       {videoUri && (
         <View style={styles.successBox}>
           <Text style={styles.successText}>
-            ✓ Video created
+            ✓ Video created successfully
           </Text>
 
           <Text style={styles.pathText}>
@@ -202,7 +214,7 @@ export default function HomeScreen() {
       )}
 
       <Text style={styles.info}>
-        Free • No credits • No generation limit
+        Free • No credits • Unlimited
       </Text>
     </ScrollView>
   );
@@ -227,7 +239,7 @@ const styles = StyleSheet.create({
 
   subtitle: {
     color: "#bbbbbb",
-    fontSize: 16,
+    fontSize: 17,
     marginTop: 8,
     marginBottom: 30,
     textAlign: "center",
@@ -290,7 +302,7 @@ const styles = StyleSheet.create({
   pathText: {
     color: "#888888",
     fontSize: 11,
-    marginTop: 8,
+    marginTop: 10,
   },
 
   info: {
