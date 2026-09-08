@@ -1,393 +1,301 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  Text,
   View,
+  Text,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
 } from "react-native";
-
 import * as ImagePicker from "expo-image-picker";
 import { execute } from "munim-ffmpeg";
-import { useVideoPlayer, VideoView } from "expo-video";
 
-function Button({ title, onPress, disabled, selected }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={{
-        paddingVertical: 15,
-        paddingHorizontal: 16,
-        borderRadius: 14,
-        marginTop: 12,
-        backgroundColor: disabled
-          ? "#444"
-          : selected
-          ? "#ffffff"
-          : "#202020",
-        borderWidth: 1,
-        borderColor: selected ? "#ffffff" : "#444",
-      }}
-    >
-      <Text
-        style={{
-          textAlign: "center",
-          fontWeight: "800",
-          fontSize: 16,
-          color: selected ? "#111" : "#fff",
-        }}
-      >
-        {title}
-      </Text>
-    </Pressable>
-  );
-}
+export default function HomeScreen() {
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
-function ResultVideo({ url }) {
-  const player = useVideoPlayer(url, (player) => {
-    player.loop = true;
-    player.play();
-  });
-
-  return (
-    <VideoView
-      player={player}
-      style={{
-        width: "100%",
-        aspectRatio: 16 / 9,
-        borderRadius: 18,
-        marginTop: 16,
-      }}
-      allowsFullscreen
-      allowsPictureInPicture
-    />
-  );
-}
-
-export default function Home() {
-  const [asset, setAsset] = useState(null);
-  const [duration, setDuration] = useState(5);
-  const [motion, setMotion] = useState("zoom");
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
-
-  async function pickImage() {
+  const pickImage = async () => {
     try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Please allow access to your photos."
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 1,
         allowsEditing: false,
+        quality: 1,
       });
 
-      if (!result.canceled) {
-        setAsset(result.assets[0]);
-        setVideoUrl("");
-        setProgress("");
+      if (!result.canceled && result.assets?.length > 0) {
+        setImageUri(result.assets[0].uri);
+        setVideoUri(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       Alert.alert(
-        "Photo error",
-        String(error?.message || error)
+        "Image error",
+        error?.message || String(error)
       );
     }
-  }
+  };
 
-  function getFilter() {
-    const frames = duration * 30;
-
-    if (motion === "out") {
-      return (
-        "scale=1400:800:force_original_aspect_ratio=increase," +
-        "crop=1280:720," +
-        `zoompan=z='if(eq(on,1),1.15,max(zoom-0.001,1.0))':` +
-        `d=${frames}:s=1280x720:fps=30`
-      );
-    }
-
-    if (motion === "pan") {
-      return (
-        "scale=1500:850:force_original_aspect_ratio=increase," +
-        `zoompan=z='1.08':x='(iw-iw/zoom)*on/${frames}':` +
-        `y='(ih-ih/zoom)/2':d=${frames}:s=1280x720:fps=30`
-      );
-    }
-
-    return (
-      "scale=1400:800:force_original_aspect_ratio=increase," +
-      "crop=1280:720," +
-      `zoompan=z='min(zoom+0.001,1.15)':` +
-      `d=${frames}:s=1280x720:fps=30`
-    );
-  }
-
-  async function createVideo() {
-    if (!asset?.uri) {
-      Alert.alert(
-        "Choose a photo",
-        "Choose a photo first."
-      );
+  const createVideo = async () => {
+    if (!imageUri) {
+      Alert.alert("Select photo", "Please select a photo first.");
       return;
     }
 
-    setBusy(true);
-    setVideoUrl("");
-    setProgress("Creating video...");
-
     try {
-      const inputPath = asset.uri.replace("file://", "");
+      setCreating(true);
+      setVideoUri(null);
+
+      // FFmpeg најпоузданије ради са обичном локалном путањом.
+      const inputPath = imageUri.startsWith("file://")
+        ? imageUri.substring(7)
+        : imageUri;
 
       const slash = inputPath.lastIndexOf("/");
-      const directory =
-        slash >= 0
-          ? inputPath.substring(0, slash + 1)
-          : "";
+
+      if (slash === -1) {
+        throw new Error("Invalid image path.");
+      }
+
+      const directory = inputPath.substring(0, slash + 1);
 
       const outputPath =
-        directory + `motionframe_${Date.now()}.mp4`;
+        directory + "generated_video_" + Date.now() + ".mp4";
 
-      const result = await execute(
-        [
-          "-y",
-          "-loop",
-          "1",
-          "-i",
-          inputPath,
-          "-vf",
-          getFilter(),
-          "-t",
-          String(duration),
-          "-r",
-          "30",
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-movflags",
-          "+faststart",
-          outputPath,
-        ],
-        undefined,
-        (
-          timeMs,
-          sizeBytes,
-          bitrateKbits,
-          speed,
-          frame
-        ) => {
-          if (frame) {
-            const total = duration * 30;
+      const args = [
+        "-y",
 
-            const percent = Math.min(
-              100,
-              Math.round((frame / total) * 100)
-            );
+        "-loop",
+        "1",
 
-            setProgress(
-              `Creating video... ${percent}%`
-            );
-          }
-        }
-      );
+        "-i",
+        inputPath,
+
+        "-vf",
+        "scale=720:-2,format=yuv420p",
+
+        "-r",
+        "30",
+
+        "-t",
+        "5",
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "veryfast",
+
+        "-crf",
+        "23",
+
+        "-movflags",
+        "+faststart",
+
+        outputPath,
+      ];
+
+      const result = await execute(args);
 
       if (!result.success) {
         throw new Error(
           result.failStackTrace ||
             result.output ||
-            "Video creation failed."
+            "FFmpeg could not create the video."
         );
       }
 
-      setVideoUrl(`file://${outputPath}`);
-      setProgress("Done");
-    } catch (error) {
-      console.log(error);
-      setProgress("");
+      const finalUri = "file://" + outputPath;
+
+      setVideoUri(finalUri);
 
       Alert.alert(
+        "Success",
+        "Video created successfully."
+      );
+    } catch (error: any) {
+      Alert.alert(
         "Video error",
-        String(error?.message || error)
+        error?.message || String(error)
       );
     } finally {
-      setBusy(false);
+      setCreating(false);
     }
-  }
+  };
 
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: "#0b0b0b",
-      }}
+    <ScrollView
+      contentContainerStyle={styles.container}
     >
-      <ScrollView
-        contentContainerStyle={{
-          padding: 20,
-          paddingBottom: 60,
-        }}
+      <Text style={styles.title}>
+        Free Photo to Video
+      </Text>
+
+      <Text style={styles.subtitle}>
+        Create videos from your photos
+      </Text>
+
+      <TouchableOpacity
+        style={styles.button}
+        onPress={pickImage}
+        disabled={creating}
       >
-        <Text
-          style={{
-            color: "#fff",
-            fontSize: 30,
-            fontWeight: "900",
-            marginTop: 10,
-          }}
-        >
-          MotionFrame AI
+        <Text style={styles.buttonText}>
+          Choose Photo
         </Text>
+      </TouchableOpacity>
 
-        <Text
-          style={{
-            color: "#aaa",
-            fontSize: 15,
-            marginTop: 6,
-          }}
-        >
-          Create unlimited photo motion videos.
-        </Text>
-
-        <Button
-          title={
-            asset
-              ? "Choose another photo"
-              : "Choose photo"
-          }
-          onPress={pickImage}
-          disabled={busy}
+      {imageUri && (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.image}
+          resizeMode="contain"
         />
+      )}
 
-        {asset && (
-          <Image
-            source={{ uri: asset.uri }}
-            style={{
-              width: "100%",
-              aspectRatio: 1,
-              borderRadius: 18,
-              marginTop: 16,
-            }}
-            resizeMode="cover"
-          />
+      <TouchableOpacity
+        style={[
+          styles.button,
+          styles.createButton,
+          (!imageUri || creating) &&
+            styles.disabledButton,
+        ]}
+        onPress={createVideo}
+        disabled={!imageUri || creating}
+      >
+        {creating ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" />
+            <Text style={styles.buttonText}>
+              Creating video...
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.buttonText}>
+            Create Video
+          </Text>
         )}
+      </TouchableOpacity>
 
-        <Text
-          style={{
-            color: "#fff",
-            fontWeight: "800",
-            fontSize: 18,
-            marginTop: 22,
-          }}
-        >
-          Motion
-        </Text>
+      {videoUri && (
+        <View style={styles.successBox}>
+          <Text style={styles.successText}>
+            ✓ Video created
+          </Text>
 
-        <Button
-          title="Zoom In"
-          selected={motion === "zoom"}
-          onPress={() => setMotion("zoom")}
-          disabled={busy}
-        />
-
-        <Button
-          title="Zoom Out"
-          selected={motion === "out"}
-          onPress={() => setMotion("out")}
-          disabled={busy}
-        />
-
-        <Button
-          title="Camera Pan"
-          selected={motion === "pan"}
-          onPress={() => setMotion("pan")}
-          disabled={busy}
-        />
-
-        <Text
-          style={{
-            color: "#fff",
-            fontWeight: "800",
-            fontSize: 18,
-            marginTop: 22,
-          }}
-        >
-          Duration
-        </Text>
-
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 10,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Button
-              title="5 sec"
-              selected={duration === 5}
-              onPress={() => setDuration(5)}
-              disabled={busy}
-            />
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Button
-              title="10 sec"
-              selected={duration === 10}
-              onPress={() => setDuration(10)}
-              disabled={busy}
-            />
-          </View>
+          <Text style={styles.pathText}>
+            {videoUri}
+          </Text>
         </View>
+      )}
 
-        <Button
-          title="Create video"
-          onPress={createVideo}
-          disabled={!asset || busy}
-        />
-
-        {busy && (
-          <View
-            style={{
-              alignItems: "center",
-              marginTop: 22,
-            }}
-          >
-            <ActivityIndicator size="large" />
-
-            <Text
-              style={{
-                color: "#aaa",
-                marginTop: 10,
-              }}
-            >
-              {progress}
-            </Text>
-          </View>
-        )}
-
-        {videoUrl ? (
-          <>
-            <Text
-              style={{
-                color: "#fff",
-                fontWeight: "800",
-                fontSize: 18,
-                marginTop: 26,
-              }}
-            >
-              Your video
-            </Text>
-
-            <ResultVideo
-              key={videoUrl}
-              url={videoUrl}
-            />
-          </>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+      <Text style={styles.info}>
+        Free • No credits • No generation limit
+      </Text>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#080808",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+
+  title: {
+    color: "#ffffff",
+    fontSize: 30,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+
+  subtitle: {
+    color: "#bbbbbb",
+    fontSize: 16,
+    marginTop: 8,
+    marginBottom: 30,
+    textAlign: "center",
+  },
+
+  button: {
+    width: "100%",
+    minHeight: 56,
+    backgroundColor: "#6c4cff",
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+
+  createButton: {
+    backgroundColor: "#18a558",
+    marginTop: 20,
+  },
+
+  disabledButton: {
+    opacity: 0.45,
+  },
+
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  image: {
+    width: "100%",
+    height: 420,
+    backgroundColor: "#151515",
+    borderRadius: 16,
+  },
+
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  successBox: {
+    width: "100%",
+    backgroundColor: "#151515",
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 5,
+  },
+
+  successText: {
+    color: "#55dd88",
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+
+  pathText: {
+    color: "#888888",
+    fontSize: 11,
+    marginTop: 8,
+  },
+
+  info: {
+    color: "#777777",
+    marginTop: 30,
+    fontSize: 14,
+  },
+});
