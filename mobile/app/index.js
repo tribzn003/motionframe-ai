@@ -165,8 +165,6 @@ export default function Home() {
           "30",
           "-c:v",
           "libx264",
-          "-preset",
-          "ultrafast",
           "-pix_fmt",
           "yuv420p",
           "-movflags",
