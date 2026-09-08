@@ -18,7 +18,7 @@
       "package": "com.motionframe.ai"
     },
     "extra": {
-      "backendUrl": "https://YOUR-BACKEND.onrender.com"
+  "backendUrl": "https://motionframe-ai.onrender.com"
     }
   }
 }
