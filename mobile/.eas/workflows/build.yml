@@ -1,8 +1,5 @@
 name: Build Android APK
 
-on:
-  
-
 jobs:
   build_android:
     type: build
