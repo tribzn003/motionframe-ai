@@ -59,8 +59,23 @@ export default function HomeScreen() {
         setStatusText("");
       }
     } catch (error) {
-      Alert.alert("Error", "Could not select the photo.");
+      Alert.alert(
+        "Error",
+        "Could not select the photo."
+      );
     }
+  };
+
+  const selectDuration = (seconds) => {
+    if (seconds > 5) {
+      Alert.alert(
+        "Premium",
+        `${seconds} second videos are a Premium feature.`
+      );
+      return;
+    }
+
+    setDuration(seconds);
   };
 
   const checkService = async () => {
@@ -112,7 +127,6 @@ export default function HomeScreen() {
       ) {
         throw new Error(
           task.failure ||
-            task.failureCode ||
             "AI video generation failed."
         );
       }
@@ -138,6 +152,14 @@ export default function HomeScreen() {
       Alert.alert(
         "Describe the animation",
         "Write what you want to happen in the video."
+      );
+      return;
+    }
+
+    if (duration > 5) {
+      Alert.alert(
+        "Premium",
+        "Videos longer than 5 seconds require Premium."
       );
       return;
     }
@@ -168,7 +190,7 @@ export default function HomeScreen() {
       });
 
       formData.append("prompt", prompt.trim());
-      formData.append("duration", String(duration));
+      formData.append("duration", "5");
 
       const response = await fetch(
         `${API_URL}/generate`,
@@ -194,21 +216,17 @@ export default function HomeScreen() {
         );
       }
 
-      setStatusText(
-        `Creating ${duration} second video...`
-      );
+      setStatusText("Creating 5 second video...");
 
       const finishedVideoUrl =
-        await checkTaskUntilFinished(
-          result.task_id
-        );
+        await checkTaskUntilFinished(result.task_id);
 
       setVideoUrl(finishedVideoUrl);
       setStatusText("Video is ready!");
 
       Alert.alert(
         "Video ready",
-        `Your ${duration} second AI video has been generated.`
+        "Your 5 second AI video has been generated."
       );
     } catch (error) {
       setStatusText("");
@@ -273,7 +291,7 @@ export default function HomeScreen() {
 
       <TextInput
         style={styles.promptInput}
-        placeholder="Example: The person smiles, turns around and slowly walks away..."
+        placeholder="Example: The person smiles and slowly walks away..."
         placeholderTextColor="#888"
         value={prompt}
         onChangeText={setPrompt}
@@ -287,28 +305,44 @@ export default function HomeScreen() {
       </Text>
 
       <View style={styles.durationRow}>
-        {[5, 10, 15].map((value) => (
-          <TouchableOpacity
-            key={value}
-            style={[
-              styles.durationButton,
-              duration === value &&
-                styles.durationButtonActive,
-            ]}
-            onPress={() => setDuration(value)}
-            disabled={creating}
-          >
-            <Text
-              style={[
-                styles.durationText,
-                duration === value &&
-                  styles.durationTextActive,
-              ]}
-            >
-              {value} s
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[
+            styles.durationButton,
+            styles.durationButtonActive,
+          ]}
+          onPress={() => selectDuration(5)}
+        >
+          <Text style={styles.durationTextActive}>
+            5 s
+          </Text>
+          <Text style={styles.freeText}>
+            FREE
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.durationButton}
+          onPress={() => selectDuration(10)}
+        >
+          <Text style={styles.durationText}>
+            10 s
+          </Text>
+          <Text style={styles.premiumText}>
+            PREMIUM
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.durationButton}
+          onPress={() => selectDuration(15)}
+        >
+          <Text style={styles.durationText}>
+            15 s
+          </Text>
+          <Text style={styles.premiumText}>
+            PREMIUM
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -354,8 +388,8 @@ export default function HomeScreen() {
       )}
 
       <Text style={styles.info}>
-        Upload one photo, choose video duration,
-        and describe what you want to happen.
+        5 second videos are free. Longer videos
+        require Premium.
       </Text>
     </ScrollView>
   );
@@ -430,7 +464,7 @@ const styles = StyleSheet.create({
   durationRow: {
     width: "100%",
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     marginBottom: 22,
   },
 
@@ -439,7 +473,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1b1d21",
     borderWidth: 1,
     borderColor: "#444851",
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
   },
@@ -450,13 +484,29 @@ const styles = StyleSheet.create({
   },
 
   durationText: {
-    color: "#bbbbbb",
+    color: "#ffffff",
     fontSize: 16,
     fontWeight: "bold",
   },
 
   durationTextActive: {
     color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  freeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "bold",
+    marginTop: 4,
+  },
+
+  premiumText: {
+    color: "#f1b84b",
+    fontSize: 9,
+    fontWeight: "bold",
+    marginTop: 4,
   },
 
   generateButton: {
