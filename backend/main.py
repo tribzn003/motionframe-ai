@@ -1,12 +1,13 @@
 import os
 import uuid
 import asyncio
+import base64
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from huggingface_hub import InferenceClient
 
 
 app = FastAPI(title="MotionFrame AI API")
@@ -20,20 +21,15 @@ app.add_middleware(
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 
+HF_API_URL = (
+    "https://router.huggingface.co/"
+    "fal-ai/minimax/h3/image-to-video?_subdomain=queue"
+)
+
 OUTPUT_DIR = Path("/tmp/motionframe")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 tasks = {}
-
-
-def get_client():
-    if not HF_TOKEN:
-        raise RuntimeError("HF_TOKEN is not configured.")
-
-    return InferenceClient(
-        provider="fal-ai",
-        api_key=HF_TOKEN,
-    )
 
 
 @app.get("/")
@@ -68,25 +64,46 @@ async def create_video(
             "output": [],
         }
 
-        client = get_client()
+        encoded_image = base64.b64encode(
+            image_bytes
+        ).decode("utf-8")
 
-        video = await asyncio.to_thread(
-            client.image_to_video,
-            image_bytes,
-            prompt=prompt,
-            model="MiniMaxAI/MiniMax-H3",
-        )
+        payload = {
+            "inputs": encoded_image,
+            "parameters": {
+                "prompt": prompt
+            },
+        }
+
+        headers = {
+            "Authorization": f"Bearer {HF_TOKEN}",
+        }
+
+        async with httpx.AsyncClient(
+            timeout=600
+        ) as client:
+            response = await client.post(
+                HF_API_URL,
+                headers=headers,
+                json=payload,
+            )
+
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Hugging Face error "
+                f"{response.status_code}: "
+                f"{response.text}"
+            )
+
+        video_bytes = response.content
+
+        if not video_bytes:
+            raise RuntimeError(
+                "Hugging Face returned an empty video."
+            )
 
         output_path = OUTPUT_DIR / f"{task_id}.mp4"
-
-        if isinstance(video, bytes):
-            output_path.write_bytes(video)
-        elif hasattr(video, "read"):
-            output_path.write_bytes(video.read())
-        else:
-            raise RuntimeError(
-                "AI provider returned an unsupported video format."
-            )
+        output_path.write_bytes(video_bytes)
 
         tasks[task_id] = {
             "status": "SUCCEEDED",
