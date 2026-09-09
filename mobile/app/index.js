@@ -11,6 +11,8 @@ import {
 } from "react-native";
 
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system";
 import { execute } from "munim-ffmpeg";
 
 export default function HomeScreen() {
@@ -62,26 +64,32 @@ export default function HomeScreen() {
       setCreating(true);
       setVideoUri(null);
 
+      // Permission to save video to gallery
+      const mediaPermission =
+        await MediaLibrary.requestPermissionsAsync();
+
+      if (!mediaPermission.granted) {
+        Alert.alert(
+          "Permission needed",
+          "Please allow MotionFrame AI to save videos."
+        );
+        return;
+      }
+
       const inputPath = imageUri.startsWith("file://")
         ? imageUri.substring(7)
         : imageUri;
 
-      const slashIndex = inputPath.lastIndexOf("/");
+      // Create video first in app cache
+      const fileName =
+        "motionframe_" + Date.now() + ".mp4";
 
-      if (slashIndex === -1) {
-        throw new Error("Invalid image path.");
-      }
+      const outputUri =
+        FileSystem.cacheDirectory + fileName;
 
-      const directory = inputPath.substring(
-        0,
-        slashIndex + 1
-      );
-
-      const outputPath =
-        directory +
-        "motionframe_" +
-        Date.now() +
-        ".mp4";
+      const outputPath = outputUri.startsWith("file://")
+        ? outputUri.substring(7)
+        : outputUri;
 
       const args = [
         "-y",
@@ -123,15 +131,40 @@ export default function HomeScreen() {
         );
       }
 
-      const finalUri = outputPath.startsWith("file://")
-        ? outputPath
-        : "file://" + outputPath;
+      // Save completed MP4 to Android Gallery
+      const asset =
+        await MediaLibrary.createAssetAsync(outputUri);
 
-      setVideoUri(finalUri);
+      // Try to place it in a MotionFrame album
+      try {
+        const album =
+          await MediaLibrary.getAlbumAsync("MotionFrame");
+
+        if (album) {
+          await MediaLibrary.addAssetsToAlbumAsync(
+            [asset],
+            album,
+            false
+          );
+        } else {
+          await MediaLibrary.createAlbumAsync(
+            "MotionFrame",
+            asset,
+            false
+          );
+        }
+      } catch (albumError) {
+        console.log(
+          "Album error:",
+          albumError
+        );
+      }
+
+      setVideoUri(asset.uri);
 
       Alert.alert(
         "Success",
-        "Video created successfully!"
+        "Video created and saved to your Gallery!"
       );
     } catch (error) {
       Alert.alert(
@@ -204,11 +237,11 @@ export default function HomeScreen() {
       {videoUri && (
         <View style={styles.successBox}>
           <Text style={styles.successText}>
-            ✓ Video created successfully
+            ✓ Video saved to Gallery
           </Text>
 
           <Text style={styles.pathText}>
-            {videoUri}
+            MotionFrame
           </Text>
         </View>
       )}
@@ -301,8 +334,9 @@ const styles = StyleSheet.create({
 
   pathText: {
     color: "#888888",
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 10,
+    textAlign: "center",
   },
 
   info: {
