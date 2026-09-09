@@ -49,38 +49,4 @@ export default function HomeScreen() {
         });
 
       if (!result.canceled && result.assets?.length > 0) {
-        const asset = result.assets[0];
-
-        setImageUri(asset.uri);
-        setImageType(asset.mimeType || "image/jpeg");
-        setImageName(asset.fileName || "photo.jpg");
-        setVideoUrl(null);
-        setStatusText("");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Could not select the photo.");
-    }
-  };
-
-  const checkService = async () => {
-    const response = await fetch(`${API_URL}/status`);
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error("Could not connect to MotionFrame AI.");
-    }
-
-    return result;
-  };
-
-  const checkTaskUntilFinished = async (taskId) => {
-    for (let attempt = 0; attempt < 120; attempt++) {
-      setStatusText("AI is creating your video...");
-
-      const response = await fetch(
-        `${API_URL}/tasks/${taskId}`
-      );
-
-      const task = await response.json();
-
-      if (!response.ok) {
+        const asset = result
