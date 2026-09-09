@@ -87,10 +87,60 @@ async def generate_video(
 
     if AI_PROVIDER == "runway":
         encoded = base64.b64encode(image_bytes).decode("utf-8")
-
         data_uri = f"data:{content_type};base64,{encoded}"
 
         payload = {
             "model": "gen4_turbo",
             "promptImage": data_uri,
-            "promptText
+            "promptText": prompt.strip(),
+            "duration": duration,
+            "ratio": "1280:720",
+        }
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{RUNWAY_API}/image_to_video",
+                headers=runway_headers(),
+                json=payload,
+            )
+
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=response.text,
+            )
+
+        result = response.json()
+
+        return {
+            "provider": "runway",
+            "task_id": result.get("id"),
+        }
+
+    raise HTTPException(
+        status_code=503,
+        detail=f"Provider '{AI_PROVIDER}' is not implemented yet."
+    )
+
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str):
+    if AI_PROVIDER != "runway":
+        raise HTTPException(
+            status_code=503,
+            detail="Task polling is not available for the current provider."
+        )
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            f"{RUNWAY_API}/tasks/{task_id}",
+            headers=runway_headers(),
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=response.text,
+        )
+
+    return response.json()
