@@ -69,6 +69,17 @@ export default function HomeScreen() {
     }
   };
 
+  const checkService = async () => {
+    const response = await fetch(`${API_URL}/status`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error("Could not connect to MotionFrame AI.");
+    }
+
+    return result;
+  };
+
   const checkTaskUntilFinished = async (taskId) => {
     for (let attempt = 0; attempt < 120; attempt++) {
       setStatusText("AI is creating your video...");
@@ -84,8 +95,6 @@ export default function HomeScreen() {
           task?.detail || "Could not check video status."
         );
       }
-
-      console.log("TASK:", task);
 
       if (task.status === "SUCCEEDED") {
         if (
@@ -138,9 +147,24 @@ export default function HomeScreen() {
 
     setCreating(true);
     setVideoUrl(null);
-    setStatusText("Uploading photo...");
+    setStatusText("Checking AI service...");
 
     try {
+      const service = await checkService();
+
+      if (!service.generation_ready) {
+        setStatusText("AI video engine is not connected yet.");
+
+        Alert.alert(
+          "AI engine not connected",
+          "MotionFrame AI is working, but the video generation engine is not connected yet."
+        );
+
+        return;
+      }
+
+      setStatusText("Uploading photo...");
+
       const formData = new FormData();
 
       formData.append("image", {
@@ -166,8 +190,7 @@ export default function HomeScreen() {
         throw new Error(
           typeof result?.detail === "string"
             ? result.detail
-            : JSON.stringify(result?.detail) ||
-              "Could not start video generation."
+            : "Could not start video generation."
         );
       }
 
@@ -197,9 +220,9 @@ export default function HomeScreen() {
       setStatusText("");
 
       Alert.alert(
-        "Generation failed",
+        "Error",
         error?.message ||
-          "Could not generate the video."
+          "Could not connect to MotionFrame AI."
       );
     } finally {
       setCreating(false);
@@ -283,7 +306,7 @@ export default function HomeScreen() {
             />
 
             <Text style={styles.loadingText}>
-              Generating...
+              Checking...
             </Text>
           </View>
         ) : (
@@ -291,157 +314,4 @@ export default function HomeScreen() {
             Generate AI Video
           </Text>
         )}
-      </TouchableOpacity>
-
-      {!!statusText && (
-        <Text style={styles.status}>
-          {statusText}
-        </Text>
-      )}
-
-      {videoUrl && (
-        <TouchableOpacity
-          style={styles.videoButton}
-          onPress={openVideo}
-        >
-          <Text style={styles.videoButtonText}>
-            ▶ Watch Generated Video
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <Text style={styles.info}>
-        Upload one photo and describe what you want
-        to happen. AI will animate the photo using
-        your description.
-      </Text>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#101114",
-    padding: 20,
-    paddingTop: 55,
-    alignItems: "center",
-  },
-
-  title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 6,
-  },
-
-  subtitle: {
-    fontSize: 16,
-    color: "#aaaaaa",
-    marginBottom: 30,
-  },
-
-  photoButton: {
-    width: "100%",
-    backgroundColor: "#2d6cdf",
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  photoButtonText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-  },
-
-  image: {
-    width: "100%",
-    height: 320,
-    backgroundColor: "#1b1d21",
-    borderRadius: 14,
-    marginBottom: 25,
-  },
-
-  label: {
-    width: "100%",
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-
-  promptInput: {
-    width: "100%",
-    minHeight: 130,
-    backgroundColor: "#1b1d21",
-    borderWidth: 1,
-    borderColor: "#33363d",
-    borderRadius: 12,
-    padding: 15,
-    color: "#ffffff",
-    fontSize: 16,
-    marginBottom: 20,
-  },
-
-  generateButton: {
-    width: "100%",
-    backgroundColor: "#7b3ff2",
-    paddingVertical: 17,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  disabledButton: {
-    opacity: 0.6,
-  },
-
-  generateButtonText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  loadingText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginLeft: 10,
-  },
-
-  status: {
-    color: "#dddddd",
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 18,
-  },
-
-  videoButton: {
-    width: "100%",
-    backgroundColor: "#208b55",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 20,
-  },
-
-  videoButtonText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-  },
-
-  info: {
-    color: "#888888",
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 22,
-    lineHeight: 19,
-  },
-});
+      </Touchable
