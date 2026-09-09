@@ -12,7 +12,10 @@ import {
 
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
-import * as FileSystem from "expo-file-system";
+
+// ВАЖНО: legacy FileSystem има cacheDirectory
+import * as FileSystem from "expo-file-system/legacy";
+
 import { execute } from "munim-ffmpeg";
 
 export default function HomeScreen() {
@@ -33,13 +36,18 @@ export default function HomeScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        quality: 1,
-      });
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: false,
+          quality: 1,
+        });
 
-      if (!result.canceled && result.assets?.length > 0) {
+      if (
+        !result.canceled &&
+        result.assets &&
+        result.assets.length > 0
+      ) {
         setImageUri(result.assets[0].uri);
         setVideoUri(null);
       }
@@ -64,7 +72,6 @@ export default function HomeScreen() {
       setCreating(true);
       setVideoUri(null);
 
-      // Permission to save video to gallery
       const mediaPermission =
         await MediaLibrary.requestPermissionsAsync();
 
@@ -76,20 +83,37 @@ export default function HomeScreen() {
         return;
       }
 
+      // INPUT
       const inputPath = imageUri.startsWith("file://")
         ? imageUri.substring(7)
         : imageUri;
 
-      // Create video first in app cache
+      // OUTPUT FILE NAME
       const fileName =
-        "motionframe_" + Date.now() + ".mp4";
+        `motionframe_${Date.now()}.mp4`;
 
+      // CACHE DIRECTORY
+      const cacheDirectory =
+        FileSystem.cacheDirectory;
+
+      if (!cacheDirectory) {
+        throw new Error(
+          "App cache directory is unavailable."
+        );
+      }
+
+      // FULL OUTPUT URI
       const outputUri =
-        FileSystem.cacheDirectory + fileName;
+        `${cacheDirectory}${fileName}`;
 
-      const outputPath = outputUri.startsWith("file://")
-        ? outputUri.substring(7)
-        : outputUri;
+      // FFmpeg wants normal filesystem path
+      const outputPath =
+        outputUri.startsWith("file://")
+          ? outputUri.substring(7)
+          : outputUri;
+
+      console.log("INPUT:", inputPath);
+      console.log("OUTPUT:", outputPath);
 
       const args = [
         "-y",
@@ -121,24 +145,46 @@ export default function HomeScreen() {
         outputPath,
       ];
 
-      const result = await execute(args);
+      const result =
+        await execute(args);
 
-      if (!result.success) {
+      console.log(
+        "FFMPEG RESULT:",
+        result
+      );
+
+      if (!result?.success) {
         throw new Error(
-          result.failStackTrace ||
-            result.output ||
+          result?.failStackTrace ||
+            result?.output ||
             "FFmpeg could not create the video."
         );
       }
 
-      // Save completed MP4 to Android Gallery
-      const asset =
-        await MediaLibrary.createAssetAsync(outputUri);
+      // Проверимо да ли је MP4 стварно направљен
+      const fileInfo =
+        await FileSystem.getInfoAsync(
+          outputUri
+        );
 
-      // Try to place it in a MotionFrame album
+      if (!fileInfo.exists) {
+        throw new Error(
+          "FFmpeg finished but the video file was not created."
+        );
+      }
+
+      // SAVE TO ANDROID GALLERY
+      const asset =
+        await MediaLibrary.createAssetAsync(
+          outputUri
+        );
+
+      // MOTIONFRAME ALBUM
       try {
         const album =
-          await MediaLibrary.getAlbumAsync("MotionFrame");
+          await MediaLibrary.getAlbumAsync(
+            "MotionFrame"
+          );
 
         if (album) {
           await MediaLibrary.addAssetsToAlbumAsync(
@@ -167,6 +213,11 @@ export default function HomeScreen() {
         "Video created and saved to your Gallery!"
       );
     } catch (error) {
+      console.log(
+        "VIDEO ERROR:",
+        error
+      );
+
       Alert.alert(
         "Video error",
         error?.message || String(error)
@@ -178,7 +229,9 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={
+        styles.container
+      }
     >
       <Text style={styles.title}>
         MotionFrame AI
@@ -214,33 +267,47 @@ export default function HomeScreen() {
             styles.disabledButton,
         ]}
         onPress={createVideo}
-        disabled={!imageUri || creating}
+        disabled={
+          !imageUri || creating
+        }
       >
         {creating ? (
-          <View style={styles.loadingRow}>
+          <View
+            style={styles.loadingRow}
+          >
             <ActivityIndicator
               size="small"
               color="#ffffff"
             />
 
-            <Text style={styles.buttonText}>
+            <Text
+              style={styles.buttonText}
+            >
               Creating video...
             </Text>
           </View>
         ) : (
-          <Text style={styles.buttonText}>
+          <Text
+            style={styles.buttonText}
+          >
             Create Video
           </Text>
         )}
       </TouchableOpacity>
 
       {videoUri && (
-        <View style={styles.successBox}>
-          <Text style={styles.successText}>
+        <View
+          style={styles.successBox}
+        >
+          <Text
+            style={styles.successText}
+          >
             ✓ Video saved to Gallery
           </Text>
 
-          <Text style={styles.pathText}>
+          <Text
+            style={styles.pathText}
+          >
             MotionFrame
           </Text>
         </View>
@@ -253,95 +320,96 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#080808",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
+const styles =
+  StyleSheet.create({
+    container: {
+      flexGrow: 1,
+      backgroundColor: "#080808",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingTop: 60,
+      paddingBottom: 40,
+    },
 
-  title: {
-    color: "#ffffff",
-    fontSize: 30,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+    title: {
+      color: "#ffffff",
+      fontSize: 30,
+      fontWeight: "bold",
+      textAlign: "center",
+    },
 
-  subtitle: {
-    color: "#bbbbbb",
-    fontSize: 17,
-    marginTop: 8,
-    marginBottom: 30,
-    textAlign: "center",
-  },
+    subtitle: {
+      color: "#bbbbbb",
+      fontSize: 17,
+      marginTop: 8,
+      marginBottom: 30,
+      textAlign: "center",
+    },
 
-  button: {
-    width: "100%",
-    minHeight: 56,
-    backgroundColor: "#6c4cff",
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
+    button: {
+      width: "100%",
+      minHeight: 56,
+      backgroundColor: "#6c4cff",
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 20,
+      marginBottom: 20,
+    },
 
-  createButton: {
-    backgroundColor: "#18a558",
-    marginTop: 20,
-  },
+    createButton: {
+      backgroundColor: "#18a558",
+      marginTop: 20,
+    },
 
-  disabledButton: {
-    opacity: 0.45,
-  },
+    disabledButton: {
+      opacity: 0.45,
+    },
 
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: 18,
+      fontWeight: "bold",
+    },
 
-  image: {
-    width: "100%",
-    height: 420,
-    backgroundColor: "#151515",
-    borderRadius: 16,
-  },
+    image: {
+      width: "100%",
+      height: 420,
+      backgroundColor: "#151515",
+      borderRadius: 16,
+    },
 
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+    loadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
 
-  successBox: {
-    width: "100%",
-    backgroundColor: "#151515",
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 5,
-  },
+    successBox: {
+      width: "100%",
+      backgroundColor: "#151515",
+      borderRadius: 14,
+      padding: 16,
+      marginTop: 5,
+    },
 
-  successText: {
-    color: "#55dd88",
-    fontSize: 18,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+    successText: {
+      color: "#55dd88",
+      fontSize: 18,
+      fontWeight: "bold",
+      textAlign: "center",
+    },
 
-  pathText: {
-    color: "#888888",
-    fontSize: 12,
-    marginTop: 10,
-    textAlign: "center",
-  },
+    pathText: {
+      color: "#888888",
+      fontSize: 12,
+      marginTop: 10,
+      textAlign: "center",
+    },
 
-  info: {
-    color: "#777777",
-    marginTop: 30,
-    fontSize: 14,
-  },
-});
+    info: {
+      color: "#777777",
+      marginTop: 30,
+      fontSize: 14,
+    },
+  });
