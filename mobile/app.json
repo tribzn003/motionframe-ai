@@ -13,6 +13,13 @@
         {
           "photosPermission": "Allow MotionFrame AI to select photos for video generation."
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow MotionFrame AI to access your media.",
+          "savePhotosPermission": "Allow MotionFrame AI to save videos to your gallery."
+        }
       ]
     ],
     "android": {
