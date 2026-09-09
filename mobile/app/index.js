@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const [imageType, setImageType] = useState("image/jpeg");
   const [imageName, setImageName] = useState("photo.jpg");
   const [prompt, setPrompt] = useState("");
+  const [duration, setDuration] = useState(5);
   const [creating, setCreating] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [videoUrl, setVideoUrl] = useState(null);
@@ -79,7 +80,7 @@ export default function HomeScreen() {
   };
 
   const checkTaskUntilFinished = async (taskId) => {
-    for (let attempt = 0; attempt < 120; attempt++) {
+    for (let attempt = 0; attempt < 180; attempt++) {
       setStatusText("AI is creating your video...");
 
       const response = await fetch(
@@ -152,15 +153,10 @@ export default function HomeScreen() {
       const service = await checkService();
 
       if (!service.generation_ready) {
-        setStatusText(
-          "AI video engine is not connected yet."
-        );
-
         Alert.alert(
           "AI engine not connected",
-          "MotionFrame AI is working, but the video generation engine is not connected yet."
+          "MotionFrame AI video engine is not connected."
         );
-
         return;
       }
 
@@ -175,7 +171,7 @@ export default function HomeScreen() {
       });
 
       formData.append("prompt", prompt.trim());
-      formData.append("duration", "5");
+      formData.append("duration", String(duration));
 
       const response = await fetch(
         `${API_URL}/generate`,
@@ -202,7 +198,7 @@ export default function HomeScreen() {
       }
 
       setStatusText(
-        "Generation started. Please wait..."
+        `Creating ${duration} second video...`
       );
 
       const finishedVideoUrl =
@@ -215,256 +211,9 @@ export default function HomeScreen() {
 
       Alert.alert(
         "Video ready",
-        "Your AI video has been generated."
+        `Your ${duration} second AI video has been generated.`
       );
     } catch (error) {
       setStatusText("");
 
       Alert.alert(
-        "Error",
-        error?.message ||
-          "Could not connect to MotionFrame AI."
-      );
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const openVideo = async () => {
-    if (!videoUrl) {
-      return;
-    }
-
-    try {
-      await Linking.openURL(videoUrl);
-    } catch (error) {
-      Alert.alert(
-        "Error",
-        "Could not open the generated video."
-      );
-    }
-  };
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.title}>
-        MotionFrame AI
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Turn a photo into an AI video
-      </Text>
-
-      <TouchableOpacity
-        style={styles.photoButton}
-        onPress={pickImage}
-        disabled={creating}
-      >
-        <Text style={styles.photoButtonText}>
-          Select Photo
-        </Text>
-      </TouchableOpacity>
-
-      {imageUri && (
-        <Image
-          source={{ uri: imageUri }}
-          style={styles.image}
-          resizeMode="contain"
-        />
-      )}
-
-      <Text style={styles.label}>
-        Describe the animation
-      </Text>
-
-      <TextInput
-        style={styles.promptInput}
-        placeholder="Example: The person smiles, turns around and slowly walks away..."
-        placeholderTextColor="#888"
-        value={prompt}
-        onChangeText={setPrompt}
-        multiline
-        textAlignVertical="top"
-        editable={!creating}
-      />
-
-      <TouchableOpacity
-        style={[
-          styles.generateButton,
-          creating && styles.disabledButton,
-        ]}
-        onPress={generateVideo}
-        disabled={creating}
-      >
-        {creating ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator
-              size="small"
-              color="#ffffff"
-            />
-            <Text style={styles.loadingText}>
-              Checking...
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.generateButtonText}>
-            Generate AI Video
-          </Text>
-        )}
-      </TouchableOpacity>
-
-      {!!statusText && (
-        <Text style={styles.status}>
-          {statusText}
-        </Text>
-      )}
-
-      {videoUrl && (
-        <TouchableOpacity
-          style={styles.videoButton}
-          onPress={openVideo}
-        >
-          <Text style={styles.videoButtonText}>
-            ▶ Watch Generated Video
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <Text style={styles.info}>
-        Upload one photo and describe what you want
-        to happen. AI will animate the photo using
-        your description.
-      </Text>
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#101114",
-    padding: 20,
-    paddingTop: 55,
-    alignItems: "center",
-  },
-
-  title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 6,
-  },
-
-  subtitle: {
-    fontSize: 16,
-    color: "#aaaaaa",
-    marginBottom: 30,
-  },
-
-  photoButton: {
-    width: "100%",
-    backgroundColor: "#2d6cdf",
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  photoButtonText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-  },
-
-  image: {
-    width: "100%",
-    height: 320,
-    backgroundColor: "#1b1d21",
-    borderRadius: 14,
-    marginBottom: 25,
-  },
-
-  label: {
-    width: "100%",
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-
-  promptInput: {
-    width: "100%",
-    minHeight: 130,
-    backgroundColor: "#1b1d21",
-    borderWidth: 1,
-    borderColor: "#33363d",
-    borderRadius: 12,
-    padding: 15,
-    color: "#ffffff",
-    fontSize: 16,
-    marginBottom: 20,
-  },
-
-  generateButton: {
-    width: "100%",
-    backgroundColor: "#7b3ff2",
-    paddingVertical: 17,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  disabledButton: {
-    opacity: 0.6,
-  },
-
-  generateButtonText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  loadingText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginLeft: 10,
-  },
-
-  status: {
-    color: "#dddddd",
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 18,
-  },
-
-  videoButton: {
-    width: "100%",
-    backgroundColor: "#208b55",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 20,
-  },
-
-  videoButtonText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-  },
-
-  info: {
-    color: "#888888",
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 22,
-    lineHeight: 19,
-  },
-});
