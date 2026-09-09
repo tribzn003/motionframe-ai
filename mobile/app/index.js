@@ -59,10 +59,7 @@ export default function HomeScreen() {
         setStatusText("");
       }
     } catch (error) {
-      Alert.alert(
-        "Error",
-        "Could not select the photo."
-      );
+      Alert.alert("Error", "Could not select the photo.");
     }
   };
 
@@ -217,3 +214,308 @@ export default function HomeScreen() {
       setStatusText("");
 
       Alert.alert(
+        "Error",
+        error?.message ||
+          "Could not connect to MotionFrame AI."
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const openVideo = async () => {
+    if (!videoUrl) return;
+
+    try {
+      await Linking.openURL(videoUrl);
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        "Could not open the generated video."
+      );
+    }
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={styles.title}>
+        MotionFrame AI
+      </Text>
+
+      <Text style={styles.subtitle}>
+        Turn a photo into an AI video
+      </Text>
+
+      <TouchableOpacity
+        style={styles.photoButton}
+        onPress={pickImage}
+        disabled={creating}
+      >
+        <Text style={styles.photoButtonText}>
+          Select Photo
+        </Text>
+      </TouchableOpacity>
+
+      {imageUri && (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.image}
+          resizeMode="contain"
+        />
+      )}
+
+      <Text style={styles.label}>
+        Describe the animation
+      </Text>
+
+      <TextInput
+        style={styles.promptInput}
+        placeholder="Example: The person smiles, turns around and slowly walks away..."
+        placeholderTextColor="#888"
+        value={prompt}
+        onChangeText={setPrompt}
+        multiline
+        textAlignVertical="top"
+        editable={!creating}
+      />
+
+      <Text style={styles.label}>
+        Video duration
+      </Text>
+
+      <View style={styles.durationRow}>
+        {[5, 10, 15].map((value) => (
+          <TouchableOpacity
+            key={value}
+            style={[
+              styles.durationButton,
+              duration === value &&
+                styles.durationButtonActive,
+            ]}
+            onPress={() => setDuration(value)}
+            disabled={creating}
+          >
+            <Text
+              style={[
+                styles.durationText,
+                duration === value &&
+                  styles.durationTextActive,
+              ]}
+            >
+              {value} s
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.generateButton,
+          creating && styles.disabledButton,
+        ]}
+        onPress={generateVideo}
+        disabled={creating}
+      >
+        {creating ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator
+              size="small"
+              color="#ffffff"
+            />
+            <Text style={styles.loadingText}>
+              Creating...
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.generateButtonText}>
+            Generate AI Video
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      {!!statusText && (
+        <Text style={styles.status}>
+          {statusText}
+        </Text>
+      )}
+
+      {videoUrl && (
+        <TouchableOpacity
+          style={styles.videoButton}
+          onPress={openVideo}
+        >
+          <Text style={styles.videoButtonText}>
+            ▶ Watch Generated Video
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={styles.info}>
+        Upload one photo, choose video duration,
+        and describe what you want to happen.
+      </Text>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#101114",
+    padding: 20,
+    paddingTop: 55,
+    alignItems: "center",
+  },
+
+  title: {
+    fontSize: 30,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginBottom: 6,
+  },
+
+  subtitle: {
+    fontSize: 16,
+    color: "#aaaaaa",
+    marginBottom: 30,
+  },
+
+  photoButton: {
+    width: "100%",
+    backgroundColor: "#2d6cdf",
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
+  photoButtonText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+  },
+
+  image: {
+    width: "100%",
+    height: 320,
+    backgroundColor: "#1b1d21",
+    borderRadius: 14,
+    marginBottom: 25,
+  },
+
+  label: {
+    width: "100%",
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+
+  promptInput: {
+    width: "100%",
+    minHeight: 130,
+    backgroundColor: "#1b1d21",
+    borderWidth: 1,
+    borderColor: "#33363d",
+    borderRadius: 12,
+    padding: 15,
+    color: "#ffffff",
+    fontSize: 16,
+    marginBottom: 20,
+  },
+
+  durationRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 22,
+  },
+
+  durationButton: {
+    flex: 1,
+    backgroundColor: "#1b1d21",
+    borderWidth: 1,
+    borderColor: "#444851",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  durationButtonActive: {
+    backgroundColor: "#7b3ff2",
+    borderColor: "#7b3ff2",
+  },
+
+  durationText: {
+    color: "#bbbbbb",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  durationTextActive: {
+    color: "#ffffff",
+  },
+
+  generateButton: {
+    width: "100%",
+    backgroundColor: "#7b3ff2",
+    paddingVertical: 17,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  generateButtonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  loadingText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+    marginLeft: 10,
+  },
+
+  status: {
+    color: "#dddddd",
+    fontSize: 15,
+    textAlign: "center",
+    marginTop: 18,
+  },
+
+  videoButton: {
+    width: "100%",
+    backgroundColor: "#208b55",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 20,
+  },
+
+  videoButtonText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+  },
+
+  info: {
+    color: "#888888",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 22,
+    lineHeight: 19,
+  },
+});
