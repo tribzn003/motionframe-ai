@@ -7,7 +7,6 @@
     "scheme": "motionframe",
     "plugins": [
       "expo-router",
-      "munim-ffmpeg",
       [
         "expo-image-picker",
         {
