@@ -258,8 +258,8 @@ async def generate_video(
     if duration < 3:
         duration = 3
 
-    if duration > 10:
-        duration = 10
+    if duration > 15:
+        duration = 15
 
     task_id = str(uuid.uuid4())
 
