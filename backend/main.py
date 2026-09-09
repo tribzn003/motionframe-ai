@@ -1,9 +1,12 @@
 import os
-import base64
+import uuid
+import asyncio
+from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from huggingface_hub import InferenceClient
 
 
 app = FastAPI(title="MotionFrame AI API")
@@ -15,27 +18,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-AI_PROVIDER = os.getenv("AI_VIDEO_PROVIDER", "none").lower()
+OUTPUT_DIR = Path("/tmp/motionframe")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-RUNWAY_API = "https://api.dev.runwayml.com/v1"
-RUNWAY_VERSION = "2024-11-06"
+tasks = {}
 
 
-def runway_headers():
-    api_key = os.getenv("RUNWAYML_API_SECRET")
+def get_client():
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN is not configured.")
 
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Runway API key is not configured."
-        )
-
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "X-Runway-Version": RUNWAY_VERSION,
-    }
+    return InferenceClient(
+        provider="fal-ai",
+        api_key=HF_TOKEN,
+    )
 
 
 @app.get("/")
@@ -43,8 +41,9 @@ def home():
     return {
         "ok": True,
         "service": "MotionFrame AI",
-        "provider": AI_PROVIDER,
-        "generation_ready": AI_PROVIDER != "none",
+        "provider": "huggingface-fal",
+        "model": "MiniMaxAI/MiniMax-H3",
+        "generation_ready": bool(HF_TOKEN),
     }
 
 
@@ -52,9 +51,56 @@ def home():
 def status():
     return {
         "service": "MotionFrame AI",
-        "provider": AI_PROVIDER,
-        "generation_ready": AI_PROVIDER != "none",
+        "provider": "huggingface-fal",
+        "model": "MiniMaxAI/MiniMax-H3",
+        "generation_ready": bool(HF_TOKEN),
     }
+
+
+async def create_video(
+    task_id: str,
+    image_bytes: bytes,
+    prompt: str,
+):
+    try:
+        tasks[task_id] = {
+            "status": "RUNNING",
+            "output": [],
+        }
+
+        client = get_client()
+
+        video = await asyncio.to_thread(
+            client.image_to_video,
+            image_bytes,
+            prompt=prompt,
+            model="MiniMaxAI/MiniMax-H3",
+        )
+
+        output_path = OUTPUT_DIR / f"{task_id}.mp4"
+
+        if isinstance(video, bytes):
+            output_path.write_bytes(video)
+        elif hasattr(video, "read"):
+            output_path.write_bytes(video.read())
+        else:
+            raise RuntimeError(
+                "AI provider returned an unsupported video format."
+            )
+
+        tasks[task_id] = {
+            "status": "SUCCEEDED",
+            "output": [
+                f"https://motionframe-ai.onrender.com/videos/{task_id}"
+            ],
+        }
+
+    except Exception as error:
+        tasks[task_id] = {
+            "status": "FAILED",
+            "output": [],
+            "failure": str(error),
+        }
 
 
 @app.post("/generate")
@@ -63,13 +109,19 @@ async def generate_video(
     prompt: str = Form(...),
     duration: int = Form(5),
 ):
+    if not HF_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="HF_TOKEN is not configured."
+        )
+
     if not prompt.strip():
         raise HTTPException(
             status_code=400,
             detail="Prompt is required."
         )
 
-    content_type = image.content_type or "image/jpeg"
+    content_type = image.content_type or ""
 
     if not content_type.startswith("image/"):
         raise HTTPException(
@@ -79,68 +131,58 @@ async def generate_video(
 
     image_bytes = await image.read()
 
-    if AI_PROVIDER == "none":
+    if not image_bytes:
         raise HTTPException(
-            status_code=503,
-            detail="AI video provider is not configured yet."
+            status_code=400,
+            detail="Image is empty."
         )
 
-    if AI_PROVIDER == "runway":
-        encoded = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{content_type};base64,{encoded}"
+    task_id = str(uuid.uuid4())
 
-        payload = {
-            "model": "gen4_turbo",
-            "promptImage": data_uri,
-            "promptText": prompt.strip(),
-            "duration": duration,
-            "ratio": "1280:720",
-        }
+    tasks[task_id] = {
+        "status": "PENDING",
+        "output": [],
+    }
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{RUNWAY_API}/image_to_video",
-                headers=runway_headers(),
-                json=payload,
-            )
-
-        if response.status_code >= 400:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=response.text,
-            )
-
-        result = response.json()
-
-        return {
-            "provider": "runway",
-            "task_id": result.get("id"),
-        }
-
-    raise HTTPException(
-        status_code=503,
-        detail=f"Provider '{AI_PROVIDER}' is not implemented yet."
+    asyncio.create_task(
+        create_video(
+            task_id,
+            image_bytes,
+            prompt.strip(),
+        )
     )
+
+    return {
+        "provider": "huggingface-fal",
+        "task_id": task_id,
+    }
 
 
 @app.get("/tasks/{task_id}")
-async def get_task(task_id: str):
-    if AI_PROVIDER != "runway":
+def get_task(task_id: str):
+    task = tasks.get(task_id)
+
+    if not task:
         raise HTTPException(
-            status_code=503,
-            detail="Task polling is not available for the current provider."
+            status_code=404,
+            detail="Task not found."
         )
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(
-            f"{RUNWAY_API}/tasks/{task_id}",
-            headers=runway_headers(),
-        )
+    return task
 
-    if response.status_code >= 400:
+
+@app.get("/videos/{task_id}")
+def get_video(task_id: str):
+    video_path = OUTPUT_DIR / f"{task_id}.mp4"
+
+    if not video_path.exists():
         raise HTTPException(
-            status_code=response.status_code,
-            detail=response.text,
+            status_code=404,
+            detail="Video not found."
         )
 
-    return response.json()
+    return FileResponse(
+        path=video_path,
+        media_type="video/mp4",
+        filename=f"motionframe-{task_id}.mp4",
+    )
