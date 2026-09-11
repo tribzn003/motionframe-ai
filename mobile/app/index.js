@@ -14,27 +14,37 @@ import {
 
 import * as ImagePicker from "expo-image-picker";
 
-const API_URL = "https://motionframe-ai.onrender.com";
+const API_URL =
+  "https://motionframe-ai.onrender.com";
 
 const sleep = (ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+  new Promise((resolve) =>
+    setTimeout(resolve, ms)
+  );
 
 export default function HomeScreen() {
-  const [imageUri, setImageUri] = useState(null);
+  const [apiKey, setApiKey] = useState("");
+  const [imageUri, setImageUri] =
+    useState(null);
   const [imageType, setImageType] =
     useState("image/jpeg");
   const [imageName, setImageName] =
     useState("photo.jpg");
   const [prompt, setPrompt] = useState("");
-  const [duration, setDuration] = useState(10);
-  const [creating, setCreating] = useState(false);
-  const [statusText, setStatusText] = useState("");
-  const [videoUrl, setVideoUrl] = useState(null);
+  const [duration, setDuration] =
+    useState(10);
+  const [creating, setCreating] =
+    useState(false);
+  const [statusText, setStatusText] =
+    useState("");
+  const [videoUrl, setVideoUrl] =
+    useState(null);
 
   const pickImage = async () => {
     try {
       const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
+        await ImagePicker
+          .requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
         Alert.alert(
@@ -45,11 +55,12 @@ export default function HomeScreen() {
       }
 
       const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          allowsEditing: false,
-          quality: 1,
-        });
+        await ImagePicker
+          .launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: false,
+            quality: 1,
+          });
 
       if (
         !result.canceled &&
@@ -121,7 +132,9 @@ export default function HomeScreen() {
         task?.status || ""
       ).toLowerCase();
 
-      if (normalizedStatus === "succeeded") {
+      if (
+        normalizedStatus === "succeeded"
+      ) {
         if (
           Array.isArray(task.output) &&
           task.output.length > 0
@@ -149,11 +162,19 @@ export default function HomeScreen() {
     }
 
     throw new Error(
-      "Генерисање траје предуго. Покушајте поново."
+      "Генерисање траје предуго."
     );
   };
 
   const generateVideo = async () => {
+    if (!apiKey.trim()) {
+      Alert.alert(
+        "Недостаје API кључ",
+        "Унесите свој Wavespeed API кључ."
+      );
+      return;
+    }
+
     if (!imageUri) {
       Alert.alert(
         "Изаберите фотографију",
@@ -183,13 +204,7 @@ export default function HomeScreen() {
     setStatusText("Провера AI сервера...");
 
     try {
-      const service = await checkService();
-
-      if (!service.generation_ready) {
-        throw new Error(
-          "AI систем тренутно није повезан."
-        );
-      }
+      await checkService();
 
       setStatusText(
         "Отпремање фотографије..."
@@ -211,6 +226,11 @@ export default function HomeScreen() {
       formData.append(
         "duration",
         String(duration)
+      );
+
+      formData.append(
+        "api_key",
+        apiKey.trim()
       );
 
       const response = await fetch(
@@ -283,7 +303,9 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={
+        styles.container
+      }
       keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.title}>
@@ -292,6 +314,28 @@ export default function HomeScreen() {
 
       <Text style={styles.subtitle}>
         Претворите фотографију у AI видео
+      </Text>
+
+      <Text style={styles.label}>
+        Ваш Wavespeed API кључ
+      </Text>
+
+      <TextInput
+        style={styles.apiInput}
+        placeholder="Унесите API кључ"
+        placeholderTextColor="#888888"
+        value={apiKey}
+        onChangeText={setApiKey}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!creating}
+      />
+
+      <Text style={styles.keyInfo}>
+        Кључ се користи само за вашу
+        генерацију и не приказује се другим
+        корисницима.
       </Text>
 
       <TouchableOpacity
@@ -385,7 +429,9 @@ export default function HomeScreen() {
           </View>
         ) : (
           <Text
-            style={styles.generateButtonText}
+            style={
+              styles.generateButtonText
+            }
           >
             Генериши видео
           </Text>
@@ -412,8 +458,8 @@ export default function HomeScreen() {
       )}
 
       <Text style={styles.info}>
-        Време израде зависи од оптерећења AI
-        сервера.
+        Трошак генерације наплаћује
+        Wavespeed са корисничког налога.
       </Text>
     </ScrollView>
   );
@@ -441,6 +487,34 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
 
+  label: {
+    width: "100%",
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+
+  apiInput: {
+    width: "100%",
+    backgroundColor: "#1b1d21",
+    borderWidth: 1,
+    borderColor: "#444851",
+    borderRadius: 12,
+    padding: 15,
+    color: "#ffffff",
+    fontSize: 16,
+    marginBottom: 8,
+  },
+
+  keyInfo: {
+    width: "100%",
+    color: "#888888",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+
   photoButton: {
     width: "100%",
     backgroundColor: "#2d6cdf",
@@ -462,14 +536,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1b1d21",
     borderRadius: 14,
     marginBottom: 25,
-  },
-
-  label: {
-    width: "100%",
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginBottom: 10,
   },
 
   promptInput: {
