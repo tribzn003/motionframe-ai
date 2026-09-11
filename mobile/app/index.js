@@ -21,10 +21,12 @@ const sleep = (ms) =>
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState(null);
-  const [imageType, setImageType] = useState("image/jpeg");
-  const [imageName, setImageName] = useState("photo.jpg");
+  const [imageType, setImageType] =
+    useState("image/jpeg");
+  const [imageName, setImageName] =
+    useState("photo.jpg");
   const [prompt, setPrompt] = useState("");
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState(10);
   const [creating, setCreating] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [videoUrl, setVideoUrl] = useState(null);
@@ -36,8 +38,8 @@ export default function HomeScreen() {
 
       if (!permission.granted) {
         Alert.alert(
-          "Permission needed",
-          "Please allow access to your photos."
+          "Потребна дозвола",
+          "Дозволите приступ фотографијама."
         );
         return;
       }
@@ -49,51 +51,58 @@ export default function HomeScreen() {
           quality: 1,
         });
 
-      if (!result.canceled && result.assets?.length > 0) {
+      if (
+        !result.canceled &&
+        result.assets?.length > 0
+      ) {
         const asset = result.assets[0];
 
         setImageUri(asset.uri);
-        setImageType(asset.mimeType || "image/jpeg");
-        setImageName(asset.fileName || "photo.jpg");
+        setImageType(
+          asset.mimeType || "image/jpeg"
+        );
+        setImageName(
+          asset.fileName || "photo.jpg"
+        );
         setVideoUrl(null);
         setStatusText("");
       }
     } catch (error) {
       Alert.alert(
-        "Error",
-        "Could not select the photo."
+        "Грешка",
+        "Фотографија није могла да се изабере."
       );
     }
-  };
-
-  const selectDuration = (seconds) => {
-    if (seconds > 5) {
-      Alert.alert(
-        "Premium",
-        `${seconds} second videos are a Premium feature.`
-      );
-      return;
-    }
-
-    setDuration(seconds);
   };
 
   const checkService = async () => {
-    const response = await fetch(`${API_URL}/status`);
+    const response = await fetch(
+      `${API_URL}/status`
+    );
+
     const result = await response.json();
 
     if (!response.ok) {
       throw new Error(
-        "Could not connect to MotionFrame AI."
+        result?.detail ||
+          "Није могуће повезивање са сервером."
       );
     }
 
     return result;
   };
 
-  const checkTaskUntilFinished = async (taskId) => {
-    for (let attempt = 0; attempt < 180; attempt++) {
-      setStatusText("AI is creating your video...");
+  const checkTaskUntilFinished = async (
+    taskId
+  ) => {
+    for (
+      let attempt = 0;
+      attempt < 240;
+      attempt++
+    ) {
+      setStatusText(
+        "AI прави видео. Молимо сачекајте..."
+      );
 
       const response = await fetch(
         `${API_URL}/tasks/${taskId}`
@@ -104,11 +113,15 @@ export default function HomeScreen() {
       if (!response.ok) {
         throw new Error(
           task?.detail ||
-            "Could not check video status."
+            "Статус видеа није доступан."
         );
       }
 
-      if (task.status === "SUCCEEDED") {
+      const normalizedStatus = String(
+        task?.status || ""
+      ).toLowerCase();
+
+      if (normalizedStatus === "succeeded") {
         if (
           Array.isArray(task.output) &&
           task.output.length > 0
@@ -117,17 +130,18 @@ export default function HomeScreen() {
         }
 
         throw new Error(
-          "Video finished but no output URL was returned."
+          "Видео је завршен, али линк није враћен."
         );
       }
 
       if (
-        task.status === "FAILED" ||
-        task.status === "CANCELLED"
+        normalizedStatus === "failed" ||
+        normalizedStatus === "cancelled" ||
+        normalizedStatus === "canceled"
       ) {
         throw new Error(
           task.failure ||
-            "AI video generation failed."
+            "Генерисање видеа није успело."
         );
       }
 
@@ -135,51 +149,51 @@ export default function HomeScreen() {
     }
 
     throw new Error(
-      "Video generation took too long."
+      "Генерисање траје предуго. Покушајте поново."
     );
   };
 
   const generateVideo = async () => {
     if (!imageUri) {
       Alert.alert(
-        "Select a photo",
-        "Please select a photo first."
+        "Изаберите фотографију",
+        "Прво изаберите фотографију."
       );
       return;
     }
 
     if (!prompt.trim()) {
       Alert.alert(
-        "Describe the animation",
-        "Write what you want to happen in the video."
+        "Унесите опис",
+        "Напишите шта желите да се дешава."
       );
       return;
     }
 
-    if (duration > 5) {
+    if (![10, 15, 30].includes(duration)) {
       Alert.alert(
-        "Premium",
-        "Videos longer than 5 seconds require Premium."
+        "Погрешна дужина",
+        "Изаберите 10, 15 или 30 секунди."
       );
       return;
     }
 
     setCreating(true);
     setVideoUrl(null);
-    setStatusText("Checking AI service...");
+    setStatusText("Провера AI сервера...");
 
     try {
       const service = await checkService();
 
       if (!service.generation_ready) {
-        Alert.alert(
-          "AI engine not connected",
-          "MotionFrame AI video engine is not connected."
+        throw new Error(
+          "AI систем тренутно није повезан."
         );
-        return;
       }
 
-      setStatusText("Uploading photo...");
+      setStatusText(
+        "Отпремање фотографије..."
+      );
 
       const formData = new FormData();
 
@@ -189,8 +203,15 @@ export default function HomeScreen() {
         type: imageType,
       });
 
-      formData.append("prompt", prompt.trim());
-      formData.append("duration", "5");
+      formData.append(
+        "prompt",
+        prompt.trim()
+      );
+
+      formData.append(
+        "duration",
+        String(duration)
+      );
 
       const response = await fetch(
         `${API_URL}/generate`,
@@ -206,35 +227,39 @@ export default function HomeScreen() {
         throw new Error(
           typeof result?.detail === "string"
             ? result.detail
-            : "Could not start video generation."
+            : "Генерисање није покренуто."
         );
       }
 
       if (!result.task_id) {
         throw new Error(
-          "Server did not return a task ID."
+          "Сервер није вратио број задатка."
         );
       }
 
-      setStatusText("Creating 5 second video...");
+      setStatusText(
+        `Прављење видеа од ${duration} секунди...`
+      );
 
       const finishedVideoUrl =
-        await checkTaskUntilFinished(result.task_id);
+        await checkTaskUntilFinished(
+          result.task_id
+        );
 
       setVideoUrl(finishedVideoUrl);
-      setStatusText("Video is ready!");
+      setStatusText("Видео је спреман!");
 
       Alert.alert(
-        "Video ready",
-        "Your 5 second AI video has been generated."
+        "Видео је спреман",
+        "Притисните дугме за гледање."
       );
     } catch (error) {
       setStatusText("");
 
       Alert.alert(
-        "Error",
+        "Грешка",
         error?.message ||
-          "Could not connect to MotionFrame AI."
+          "Није могуће повезивање са сервером."
       );
     } finally {
       setCreating(false);
@@ -242,14 +267,16 @@ export default function HomeScreen() {
   };
 
   const openVideo = async () => {
-    if (!videoUrl) return;
+    if (!videoUrl) {
+      return;
+    }
 
     try {
       await Linking.openURL(videoUrl);
     } catch (error) {
       Alert.alert(
-        "Error",
-        "Could not open the generated video."
+        "Грешка",
+        "Видео није могуће отворити."
       );
     }
   };
@@ -264,7 +291,7 @@ export default function HomeScreen() {
       </Text>
 
       <Text style={styles.subtitle}>
-        Turn a photo into an AI video
+        Претворите фотографију у AI видео
       </Text>
 
       <TouchableOpacity
@@ -273,7 +300,7 @@ export default function HomeScreen() {
         disabled={creating}
       >
         <Text style={styles.photoButtonText}>
-          Select Photo
+          Изабери фотографију
         </Text>
       </TouchableOpacity>
 
@@ -286,13 +313,13 @@ export default function HomeScreen() {
       )}
 
       <Text style={styles.label}>
-        Describe the animation
+        Опишите шта желите да се дешава
       </Text>
 
       <TextInput
         style={styles.promptInput}
-        placeholder="Example: The person smiles and slowly walks away..."
-        placeholderTextColor="#888"
+        placeholder="На пример: Особа се осмехује и полако хода..."
+        placeholderTextColor="#888888"
         value={prompt}
         onChangeText={setPrompt}
         multiline
@@ -301,54 +328,46 @@ export default function HomeScreen() {
       />
 
       <Text style={styles.label}>
-        Video duration
+        Дужина видеа
       </Text>
 
       <View style={styles.durationRow}>
-        <TouchableOpacity
-          style={[
-            styles.durationButton,
-            styles.durationButtonActive,
-          ]}
-          onPress={() => selectDuration(5)}
-        >
-          <Text style={styles.durationTextActive}>
-            5 s
-          </Text>
-          <Text style={styles.freeText}>
-            FREE
-          </Text>
-        </TouchableOpacity>
+        {[10, 15, 30].map((seconds) => {
+          const active =
+            duration === seconds;
 
-        <TouchableOpacity
-          style={styles.durationButton}
-          onPress={() => selectDuration(10)}
-        >
-          <Text style={styles.durationText}>
-            10 s
-          </Text>
-          <Text style={styles.premiumText}>
-            PREMIUM
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.durationButton}
-          onPress={() => selectDuration(15)}
-        >
-          <Text style={styles.durationText}>
-            15 s
-          </Text>
-          <Text style={styles.premiumText}>
-            PREMIUM
-          </Text>
-        </TouchableOpacity>
+          return (
+            <TouchableOpacity
+              key={seconds}
+              style={[
+                styles.durationButton,
+                active &&
+                  styles.durationButtonActive,
+              ]}
+              onPress={() =>
+                setDuration(seconds)
+              }
+              disabled={creating}
+            >
+              <Text
+                style={[
+                  styles.durationText,
+                  active &&
+                    styles.durationTextActive,
+                ]}
+              >
+                {seconds} s
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <TouchableOpacity
         style={[
           styles.generateButton,
-          creating && styles.disabledButton,
+          creating &&
+            styles.disabledButton,
         ]}
         onPress={generateVideo}
         disabled={creating}
@@ -359,13 +378,16 @@ export default function HomeScreen() {
               size="small"
               color="#ffffff"
             />
+
             <Text style={styles.loadingText}>
-              Creating...
+              Процесује видео...
             </Text>
           </View>
         ) : (
-          <Text style={styles.generateButtonText}>
-            Generate AI Video
+          <Text
+            style={styles.generateButtonText}
+          >
+            Генериши видео
           </Text>
         )}
       </TouchableOpacity>
@@ -381,15 +403,17 @@ export default function HomeScreen() {
           style={styles.videoButton}
           onPress={openVideo}
         >
-          <Text style={styles.videoButtonText}>
-            ▶ Watch Generated Video
+          <Text
+            style={styles.videoButtonText}
+          >
+            ▶ Погледај направљени видео
           </Text>
         </TouchableOpacity>
       )}
 
       <Text style={styles.info}>
-        5 second videos are free. Longer videos
-        require Premium.
+        Време израде зависи од оптерећења AI
+        сервера.
       </Text>
     </ScrollView>
   );
@@ -473,7 +497,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1b1d21",
     borderWidth: 1,
     borderColor: "#444851",
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderRadius: 10,
     alignItems: "center",
   },
@@ -484,29 +508,13 @@ const styles = StyleSheet.create({
   },
 
   durationText: {
-    color: "#ffffff",
-    fontSize: 16,
+    color: "#aaaaaa",
+    fontSize: 18,
     fontWeight: "bold",
   },
 
   durationTextActive: {
     color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  freeText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "bold",
-    marginTop: 4,
-  },
-
-  premiumText: {
-    color: "#f1b84b",
-    fontSize: 9,
-    fontWeight: "bold",
-    marginTop: 4,
   },
 
   generateButton: {
