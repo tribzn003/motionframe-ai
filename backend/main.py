@@ -5,7 +5,13 @@ import asyncio
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -19,7 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-WAVESPEED_API_KEY = os.getenv("WAVESPEED_API_KEY")
+WAVESPEED_API_KEY = os.getenv(
+    "WAVESPEED_API_KEY"
+)
 
 CREATE_URL = (
     "https://api.wavespeed.ai/api/v3/"
@@ -31,17 +39,24 @@ RESULT_URL = (
     "predictions/{prediction_id}/result"
 )
 
-BASE_URL = "https://motionframe-ai.onrender.com"
+BASE_URL = (
+    "https://motionframe-ai.onrender.com"
+)
 
 OUTPUT_DIR = Path("/tmp/motionframe")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 tasks = {}
 
 
-def headers():
+def headers(api_key):
     return {
-        "Authorization": f"Bearer {WAVESPEED_API_KEY}",
+        "Authorization": (
+            f"Bearer {api_key}"
+        ),
         "Content-Type": "application/json",
     }
 
@@ -53,7 +68,7 @@ def home():
         "service": "MotionFrame AI",
         "provider": "wavespeed",
         "model": "MiniMax H3",
-        "generation_ready": bool(WAVESPEED_API_KEY),
+        "generation_ready": True,
     }
 
 
@@ -63,7 +78,7 @@ def status():
         "service": "MotionFrame AI",
         "provider": "wavespeed",
         "model": "MiniMax H3",
-        "generation_ready": bool(WAVESPEED_API_KEY),
+        "generation_ready": True,
     }
 
 
@@ -72,9 +87,12 @@ async def run_generation(
     image_data,
     prompt,
     duration,
+    api_key,
 ):
     try:
-        tasks[task_id]["status"] = "PROCESSING"
+        tasks[task_id]["status"] = (
+            "PROCESSING"
+        )
 
         payload = {
             "prompt": prompt,
@@ -89,7 +107,7 @@ async def run_generation(
 
             response = await client.post(
                 CREATE_URL,
-                headers=headers(),
+                headers=headers(api_key),
                 json=payload,
             )
 
@@ -99,7 +117,11 @@ async def run_generation(
                 )
 
             result = response.json()
-            data = result.get("data", result)
+            data = result.get(
+                "data",
+                result,
+            )
+
             prediction_id = data.get("id")
 
             if not prediction_id:
@@ -114,7 +136,7 @@ async def run_generation(
                     RESULT_URL.format(
                         prediction_id=prediction_id
                     ),
-                    headers=headers(),
+                    headers=headers(api_key),
                 )
 
                 if poll.status_code >= 400:
@@ -123,6 +145,7 @@ async def run_generation(
                     )
 
                 poll_result = poll.json()
+
                 poll_data = poll_result.get(
                     "data",
                     poll_result,
@@ -132,7 +155,9 @@ async def run_generation(
                     poll_data.get("status", "")
                 ).lower()
 
-                if prediction_status == "completed":
+                if prediction_status == (
+                    "completed"
+                ):
                     outputs = (
                         poll_data.get("outputs")
                         or []
@@ -143,8 +168,10 @@ async def run_generation(
                             "Video nije vracen."
                         )
 
-                    video_response = await client.get(
-                        outputs[0]
+                    video_response = (
+                        await client.get(
+                            outputs[0]
+                        )
                     )
 
                     video_response.raise_for_status()
@@ -158,11 +185,14 @@ async def run_generation(
                         video_response.content
                     )
 
+                    video_url = (
+                        f"{BASE_URL}/videos/"
+                        f"{task_id}"
+                    )
+
                     tasks[task_id] = {
                         "status": "SUCCEEDED",
-                        "output": [
-                            f"{BASE_URL}/videos/{task_id}"
-                        ],
+                        "output": [video_url],
                         "failure": None,
                     }
 
@@ -176,10 +206,14 @@ async def run_generation(
                     "deleted",
                 }
 
-                if prediction_status in failed_statuses:
+                if (
+                    prediction_status
+                    in failed_statuses
+                ):
                     error = (
                         poll_data.get("error")
-                        or "Generisanje nije uspelo."
+                        or
+                        "Generisanje nije uspelo."
                     )
 
                     raise RuntimeError(
@@ -203,19 +237,27 @@ async def generate_video(
     image: UploadFile = File(...),
     prompt: str = Form(...),
     duration: int = Form(5),
+    api_key: str = Form(""),
 ):
-    if not WAVESPEED_API_KEY:
+    selected_api_key = (
+        api_key.strip()
+        or WAVESPEED_API_KEY
+    )
+
+    if not selected_api_key:
         raise HTTPException(
-            status_code=500,
+            status_code=400,
             detail=(
-                "WAVESPEED_API_KEY nije podesen."
+                "Unesite Wavespeed API kljuc."
             ),
         )
 
     if not image.content_type:
         raise HTTPException(
             status_code=400,
-            detail="Fotografija nije pronadjena.",
+            detail=(
+                "Fotografija nije pronadjena."
+            ),
         )
 
     if not image.content_type.startswith(
@@ -223,13 +265,17 @@ async def generate_video(
     ):
         raise HTTPException(
             status_code=400,
-            detail="Fajl mora biti fotografija.",
+            detail=(
+                "Fajl mora biti fotografija."
+            ),
         )
 
     if not prompt.strip():
         raise HTTPException(
             status_code=400,
-            detail="Opis pokreta je obavezan.",
+            detail=(
+                "Opis pokreta je obavezan."
+            ),
         )
 
     image_bytes = await image.read()
@@ -257,6 +303,7 @@ async def generate_video(
             image_data,
             prompt.strip(),
             duration,
+            selected_api_key,
         )
     )
 
@@ -273,7 +320,9 @@ def get_task(task_id: str):
     if not task:
         raise HTTPException(
             status_code=404,
-            detail="Zadatak nije pronadjen.",
+            detail=(
+                "Zadatak nije pronadjen."
+            ),
         )
 
     return task
@@ -289,7 +338,9 @@ def get_video(task_id: str):
     if not video_path.exists():
         raise HTTPException(
             status_code=404,
-            detail="Video nije pronadjen.",
+            detail=(
+                "Video nije pronadjen."
+            ),
         )
 
     return FileResponse(
